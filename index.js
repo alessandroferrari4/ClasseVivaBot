@@ -2,7 +2,9 @@ require('dotenv').config(); //modulo per variabili d'ambiente
 
 const TelegramBot = require('node-telegram-bot-api'); //api per telegram
 const token = process.env.TOKEN;
-const bot = new TelegramBot(token, { polling: true });
+const port = process.env.PORT || 8001;
+const host = process.env.HOST;
+const bot = new TelegramBot(token, { webHook: { port: port, host: host } });
 
 const { ClasseViva } = require("classeviva-apiv2"); //api per classeviva
 const mysql = require('mysql'); //modulo per database mysql
