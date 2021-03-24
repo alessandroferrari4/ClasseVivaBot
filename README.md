@@ -12,4 +12,4 @@ Bot telegram per accedere al proprio profilo, senza utilizzare il sito o l'app u
 * Aggiornamento delle credenziali
 * Password criptata tramite algoritmo
 ## Release 1.1
-* Bug fix --> now ready for heroku deployment
+* Bug fix --> pronto per il deploy su heroku
