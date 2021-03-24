@@ -1,19 +1,23 @@
-require('dotenv').config(); //modulo per variabili d'ambiente
+require('dotenv').config();
+const TelegramBot = require('node-telegram-bot-api');
+const { ClasseViva } = require("classeviva-apiv2");
+const mysql = require('mysql');
+const emoji = require('node-emoji');
+const crypto = require("crypto");
+const moment = require('moment'); 
 
-const TelegramBot = require('node-telegram-bot-api'); //api per telegram
 const token = process.env.TOKEN;
-const bot = new TelegramBot(token, { polling: true });
-
-const { ClasseViva } = require("classeviva-apiv2"); //api per classeviva
-const mysql = require('mysql'); //modulo per database mysql
-
-const crypto = require("crypto"); //modulo per criptare le password con una secret key
-const IV_LENGTH = 16;
+const url = process.env.URL;
 const key = process.env.ENCRYPTION_KEY;
+const IV_LENGTH = 16;
 
-const emoji = require('node-emoji'); //modulo per le emoji
-const moment = require('moment'); //modulo per formattare le date da inserire nel database
-const validator = require("email-validator"); //modulo per convalidare una email
+const options = {
+    webHook: {
+        port: process.env.PORT,
+    }
+};
+const bot = new TelegramBot(token, options);
+bot.setWebHook(`${url}/bot${token}`);
 
 let answerCallbacks = {};
 
@@ -31,7 +35,6 @@ con.connect(err => {
     }
 });
 
-//Cattura tutti i messaggi inviati per accedere
 bot.on('message', msg => {
     var callback = answerCallbacks[msg.chat.id];
     if (callback) {
@@ -40,7 +43,6 @@ bot.on('message', msg => {
     }
 });
 
-//Esegue tutte le callback della inline_keyboard
 bot.on("callback_query", callbackQuery => {
     let msg = callbackQuery.message;
     bot.answerCallbackQuery(callbackQuery.id).then(() => {
@@ -101,7 +103,6 @@ bot.on("callback_query", callbackQuery => {
     });
 });
 
-//Inizializzazione del bot
 bot.onText(/\/start/, msg => {
     bot.sendMessage(msg.chat.id, 'Benvenuto ' + msg.from.first_name + emoji.get('grin')).then(() => {
         bot.sendMessage(msg.chat.id, 'Digita /accedi per accedere, altrimenti digita /help se hai bisogno di aiuto.').then(() => {
@@ -125,7 +126,6 @@ bot.onText(/\/start/, msg => {
     });
 });
 
-//Permette di accedere, quindi inserisce le credenziali nel DB per l'accesso a classeviva
 bot.onText(/\/accedi/, msg => {
     let sql = 'SELECT * FROM users WHERE id=?';
     con.query(sql, [msg.chat.id], (err, results) => {
@@ -150,27 +150,22 @@ bot.onText(/\/accedi/, msg => {
     });
 });
 
-//Visualizza tutti i voti
 bot.onText(/\/voti/, msg => {
     operation('voti', msg.chat.id, null);
 });
 
-//Visualizza le informazioni del profilo
 bot.onText(/\/profilo/, msg => {
     operation('profilo', msg.chat.id, null);
 });
 
-//Visualizza le annotazioni positive e negative
 bot.onText(/\/note/, msg => {
     operation('note', msg.chat.id, null);
 });
 
-//Visualizza le lezioni del giorno corrente
 bot.onText(/\/oggi/, msg => {
     operation('oggi', msg.chat.id, moment().format('MM-DD-YYYY'));
 });
 
-//Visualizza le lezioni di una determinata data
 bot.onText(/\/giorno/, msg => {
     bot.sendMessage(msg.chat.id, 'Inserisci la data in questo formato: ' + '\n' + 'mm/dd/yyyy').then(() => {
         answerCallbacks[msg.chat.id] = answer => {
@@ -179,12 +174,10 @@ bot.onText(/\/giorno/, msg => {
     });
 });
 
-//Visualizza i documenti in didattica
 bot.onText(/\/didattica/, msg => {
     operation('didattica', msg.chat.id, null);
 });
 
-//Aggiornamento delle credenziali nel DB
 bot.onText(/\/help/, msg => {
     bot.sendMessage(msg.chat.id, 'Di cosa hai bisogno?', {
         "reply_markup": {
@@ -208,7 +201,6 @@ bot.onText(/\/help/, msg => {
     });
 });
 
-//Cancellazione del proprio account dal DB
 bot.onText(/\/logout/, msg => {
     bot.sendMessage(msg.chat.id, 'Le tue credenziali saranno rimosse SOLO dal database, e non da ClasseViva.' + '\n' + 'Vuoi continuare?', {
         "reply_markup": {
@@ -228,8 +220,6 @@ bot.onText(/\/logout/, msg => {
         },
     });
 });
-
-
 
 function ClasseVivaSession(id, email, password, type, date) {
 
@@ -313,7 +303,6 @@ function ClasseVivaSession(id, email, password, type, date) {
     });
 }
 
-//Esegue le operazioni di classeviva
 function operation(type, user, date) {
     getInfo(user, (id, logged) => {
         if (user == id && logged == 0) {
@@ -328,7 +317,6 @@ function operation(type, user, date) {
     });
 }
 
-//Query che ritorna i dati della tabella session per il login
 function getInfo(id, callback) {
     let sql = 'SELECT id,logged FROM users WHERE id=?';
     con.query(sql, [id], (err, results) => {
@@ -342,7 +330,6 @@ function getInfo(id, callback) {
     });
 }
 
-//Query che ritorna i dati della tabella user con email e password per connettersi a classeviva
 function getStatus(id, callback) {
     let sql = 'SELECT id,email,password FROM users WHERE id=?';
     con.query(sql, [id], (err, results) => {
@@ -401,7 +388,6 @@ function login(user) {
     });
 }
 
-//Inserimento statistiche nel DB per la parte web
 function insertStatistics(type, id) {
     let date = moment().format('YYYY-MM-DD HH:mm:ss');
     sql = 'INSERT INTO statistics (request,date,fk_user) VALUES (?,?,?)';
@@ -412,15 +398,6 @@ function insertStatistics(type, id) {
     });
 }
 
-//Valida l'email e ritorna un booleano
-function validate(email) {
-    if (validator.validate(email) == false)
-        return false;
-    else
-        return true;
-}
-
-//Cripta la password con una chiave segreta
 function encrypt(text) {
     let iv = crypto.randomBytes(IV_LENGTH);
     let cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
@@ -429,7 +406,6 @@ function encrypt(text) {
     return iv.toString('hex') + ':' + encrypted.toString('hex');
 }
 
-//Decripta la password con una chiave segreta
 function decrypt(text) {
     let textParts = text.split(':');
     let iv = Buffer.from(textParts.shift(), 'hex');
