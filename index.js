@@ -9,8 +9,8 @@ const options = {
     }
 };
 const url = process.env.URL;
-const bot = new TelegramBot(TOKEN, options);
-bot.setWebHook(`${url}/bot${TOKEN}`);
+const bot = new TelegramBot(token, options);
+bot.setWebHook(`${url}/bot${token}`);
 
 const { ClasseViva } = require("classeviva-apiv2"); //api per classeviva
 const mysql = require('mysql'); //modulo per database mysql
