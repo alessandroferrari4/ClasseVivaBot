@@ -4,7 +4,7 @@ const { ClasseViva } = require("classeviva-apiv2");
 const mysql = require('mysql');
 const emoji = require('node-emoji');
 const crypto = require("crypto");
-const moment = require('moment'); 
+const moment = require('moment');
 
 const token = process.env.TOKEN;
 const url = process.env.URL;
@@ -54,22 +54,20 @@ bot.on("callback_query", callbackQuery => {
                         if (err) {
                             insertError(err);
                             bot.sendMessage(msg.chat.id, 'Aggiornamento della password non riuscito, riprova più tardi.');
-                        }
-
-                        else {
+                        } else {
                             bot.sendMessage(msg.chat.id, 'Password cambiata correttamente, digita / per visualizzare i comandi');
                         }
                     });
                 }
             });
         } else if (callbackQuery.data == '2') {
-            bot.sendMessage(msg.chat.id, 'Inserisci la nuova email:').then(() => {
+            bot.sendMessage(msg.chat.id, 'Inserisci la nuova email o il nuovo username:').then(() => {
                 answerCallbacks[msg.chat.id] = answer => {
                     let sql = 'UPDATE users SET email=? WHERE id=?';
                     con.query(sql, [answer.text, msg.chat.id], err => {
                         if (err) {
                             insertError(err);
-                            bot.sendMessage(msg.chat.id, 'Aggiornamento della email non riuscito, riprova più tardi.');
+                            bot.sendMessage(msg.chat.id, 'Aggiornamento della email/username non riuscito, riprova più tardi.');
                         }
                         else {
                             bot.sendMessage(msg.chat.id, 'Email cambiata correttamente, digita / per visualizzare i comandi');
@@ -111,8 +109,7 @@ bot.onText(/\/start/, msg => {
                 if (err) {
                     insertError(err);
                     bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
-                }
-                else if (results[0] == null) {
+                } else if (results[0] == null) {
                     sql = 'INSERT INTO users(id,logged) VALUES (?,?)';
                     con.query(sql, [msg.chat.id, false], err => {
                         if (err) {
@@ -132,15 +129,13 @@ bot.onText(/\/accedi/, msg => {
         if (err) {
             insertError(err);
             bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
-        }
-        else if (results[0] == null) {
+        } else if (results[0] == null) {
             sql = 'INSERT INTO users(id,logged) VALUES (?,?)';
             con.query(sql, [msg.chat.id, false], err => {
                 if (err) {
                     insertError(err);
                     bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
-                }
-                else {
+                } else {
                     login(msg.chat.id);
                 }
             });
@@ -167,7 +162,7 @@ bot.onText(/\/oggi/, msg => {
 });
 
 bot.onText(/\/giorno/, msg => {
-    bot.sendMessage(msg.chat.id, 'Inserisci la data in questo formato: ' + '\n' + 'mm/dd/yyyy').then(() => {
+    bot.sendMessage(msg.chat.id, 'Inserisci la data in questo formato:' + '\n' + '_' + 'mm/dd/yyyy' + '_', { parse_mode: 'Markdown' }).then(() => {
         answerCallbacks[msg.chat.id] = answer => {
             operation('giorno', msg.chat.id, answer.text);
         }
@@ -188,7 +183,7 @@ bot.onText(/\/help/, msg => {
                         callback_data: "1",
                     },
                     {
-                        text: "Aggiorna email",
+                        text: "Aggiorna email o username",
                         callback_data: "2",
                     },
                     {
@@ -231,75 +226,154 @@ function ClasseVivaSession(id, email, password, type, date) {
         let topics = await session.getToday(date);
         let profile = await session.getProfile();
 
+        let message = '';
+        let ora = '';
+        let text = '';
+        let color;
+        let info = [];
+        let presences = [];
+        let subjects = [];
+
         switch (type) {
             case 'note':
                 if (notes.length == 0) {
                     bot.sendMessage(id, 'Non hai note, bravo!' + emoji.emojify(':sunglasses::clap:'));
                 } else {
-                    notes.forEach(element => {
-                        bot.sendMessage(id, 'Insegnante: ' + element.teacher + '\n' + 'Descrizione: ' + element.content + '\n' + 'Data: ' + element.date + '\n');
-                    });
+                    for (let x in notes) {
+                        if (info.find(val => val == notes[x].teacher)) { }
+                        else {
+                            info.push(notes[x].teacher);
+                        }
+                    }
+                    for (let x in info) {
+                        message += '\n' + emoji.get('male-teacher') + info[x] + '\n';
+                        notes.forEach(element => {
+                            if (info[x] == element.teacher)
+                                message += '\n' + emoji.get('clipboard') + element.content + '\n' + emoji.get('date') + element.date + '\n';
+                        });
+                    }
                 }
                 break;
             case 'voti':
-                marks.forEach(element => {
-                    bot.sendMessage(id, 'Voto: ' + element.mark + '\n' + 'Materia: ' + element.subject + '\n' + 'Tipo: ' + element.type + 'Data: ' + element.date + emoji.get('book') + '\n');
+                let media = 0;
+                let cont = 0;
+                for (let x in marks) {
+                    if (info.find(val => val == marks[x].subject)) { }
+                    else {
+                        info.push(marks[x].subject);
+                    }
+                }
+                for (let x in info) {
+                    message += '\n' + '_' + info[x] + '_' + '\n';
+                    marks.forEach(element => {
+                        if (element.mark.includes('-')) {
+                            media += parseFloat(element.mark) - 1 + 0.75;
+                            cont += 1;
+                        } else if (element.mark.includes('+')) {
+                            media += parseFloat(element.mark) + 0.25;
+                            cont += 1;
+                        } else if (element.mark.includes('½')) {
+                            media += parseFloat(element.mark) + 0.50;
+                            cont += 1;
+                        }
+                        if (info[x] == element.subject) {
+                            if (parseInt(element.mark) >= 6 || element.mark.includes('s') || element.mark.includes('b') || element.mark.includes('d') || element.mark.includes('o'))
+                                color = emoji.get('white_check_mark');
+                            else
+                                color = emoji.get('exclamation');
+                            message += '\n' + color + element.mark + '\n' + emoji.get('date') + element.date + '\n' + emoji.get('clipboard') + element.type + '\n';
+                        }
+                    });
+                }
+                message += '\n' + 'Media totale: ' + (media / cont).toFixed(2);
+                bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {
+                    bot.sendMessage(id, 'Hai troppi voti, di ai tuoi professori di calmarsi!' + emoji.get('joy') + '\n' + 'Puoi controllarli sull\'app ClasseViva o sul sito:' + 'https://web.spaggiari.eu/sdf/app/default/cvv.php');
                 });
                 break;
             case 'profilo':
                 bot.sendPhoto(id, profile['pic']).then(() => {
-                    bot.sendMessage(id, 'Nome: ' + profile['name'] + '\n' + 'Id: ' + profile['uid'] + '\n' + 'Scuola: ' + profile['schoolName']);
+                    bot.sendMessage(id, emoji.get('smile') + '*' + profile['name'] + '*' + '\n' + emoji.get('id') + profile['uid'] + '\n' + emoji.get('school') + profile['schoolName'], { parse_mode: 'Markdown' });
                 });
                 break;
             case 'oggi':
-                let presences = topics['presences'];
-                let subjects = topics['subjects'];
+                presences = topics['presences'];
+                subjects = topics['subjects'];
                 if (presences.length == 0 && subjects.length == 0) {
                     bot.sendMessage(id, 'Oggi è il tuo giorno libero, goditelo!' + emoji.get('champagne'));
                 } else {
-                    let today = new Promise((resolve, reject) => {
-                        presences.forEach((element, index, array) => {
-                            bot.sendMessage(id, 'Presenza: ' + element.status + ' ' + element.length + ' ora/e');
-                            if (index === array.length - 1) resolve();
-                        });
+                    message += '_' + 'Presenze' + '_' + '\n';
+                    presences.forEach(element => {
+                        if (element.status == 'AL')
+                            color = emoji.get('exclamation');
+                        else
+                            color = emoji.get('white_check_mark');
+                        message += '\n' + color + ' ' + element.status + ' ' + element.length + '\n';
                     });
-                    today.then(() => {
-                        subjects.forEach(element => {
-                            bot.sendMessage(id, 'Insegnante: ' + element.teacherName + '\n' + 'Tipo: ' + element.lessonType.replace(':', '') + '\n' + 'Descrizione: ' + element.lessonArgument + '\n' + 'Materia: ' + element.subject + '\n' + 'Ora: ' + element.hour + '\n' + 'Durata:' + element.hoursDone + ' ora/e' + '\n');
-                        });
+                    message += '\n' + '_' + 'Lezioni' + '_' + '\n';
+                    subjects.forEach(element => {
+                        if (element.hoursDone <= 1) {
+                            ora = 'ora';
+                            text = 'fatta';
+                        } else {
+                            ora = 'ore';
+                            text = 'fatte';
+                        }
+                        message += '\n' + emoji.get('male-teacher') + '*' + element.teacherName + '*' + '\n' + element.subject + '\n' + element.lessonArgument + '\n' + element.hour + ' ora' + '\n' + element.hoursDone + ' ' + ora + ' ' + text + '\n';
                     });
+                    bot.sendMessage(id, message, { parse_mode: 'Markdown' });
                 }
                 break;
             case 'didattica':
-                assignments.forEach(element => {
-                    bot.sendMessage(id, 'Insegnante: ' + element.teacherName + '\n' + 'Descrizione: ' + element.assignmentTitle + '\n' + 'Data: ' + element.date + '\n');
+                for (let x in assignments) {
+                    if (info.find(val => val == assignments[x].teacherName)) { }
+                    else {
+                        info.push(assignments[x].teacherName);
+                    }
+                }
+                for (let x in info) {
+                    message += '\n' + emoji.get('male-teacher') + '*' + info[x] + '*' + '\n';
+                    assignments.forEach(element => {
+                        if (info[x] == element.teacherName)
+                            message += '\n' + emoji.get('clipboard') + element.assignmentTitle + '\n' + emoji.get('date') + element.date + '\n';
+                    });
+                }
+                bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {
+                    bot.sendMessage(id, 'Hai troppi file in didattica che non riesco a caricare!');
                 });
                 break;
             case 'giorno':
-                let presences_date = topics['presences'];
-                let subjects_date = topics['subjects'];
-                if (presences_date.length == 0 && subjects_date.length == 0) {
-                    bot.sendMessage(id, 'Era il tuo giorno libero, te lo sarai goduto!' + emoji.get('champagne'));
+                presences = topics['presences'];
+                subjects = topics['subjects'];
+                if (presences.length == 0 && subjects.length == 0) {
+                    bot.sendMessage(id, 'Oggi è il tuo giorno libero, goditelo!' + emoji.get('champagne'));
                 } else {
-                    let today = new Promise((resolve, reject) => {
-                        presences_date.forEach((element, index, array) => {
-                            bot.sendMessage(id, 'Presenza: ' + element.status + ' ' + element.length + ' ora/e');
-                            if (index === array.length - 1) resolve();
-                        });
+                    message += '_' + 'Presenze' + '_' + '\n';
+                    presences.forEach(element => {
+                        if (element.status == 'AL')
+                            color = emoji.get('exclamation');
+                        else
+                            color = emoji.get('white_check_mark');
+                        message += '\n' + color + ' ' + element.status + ' ' + element.length + '\n';
                     });
-                    today.then(() => {
-                        subjects_date.forEach(element => {
-                            bot.sendMessage(id, 'Insegnante: ' + element.teacherName + '\n' + 'Tipo: ' + element.lessonType.replace(':', '') + '\n' + 'Descrizione: ' + element.lessonArgument + '\n' + 'Materia: ' + element.subject + '\n' + 'Ora: ' + element.hour + '\n' + 'Durata:' + element.hoursDone + ' ora/e' + '\n');
-                        });
+                    message += '\n' + '_' + 'Lezioni' + '_' + '\n';
+                    subjects.forEach(element => {
+                        if (element.hoursDone <= 1) {
+                            ora = 'ora';
+                            text = 'fatta';
+                        } else {
+                            ora = 'ore';
+                            text = 'fatte';
+                        }
+                        message += '\n' + emoji.get('male-teacher') + '*' + element.teacherName + '*' + '\n' + element.subject + '\n' + element.lessonArgument + '\n' + element.hour + ' ora' + '\n' + element.hoursDone + ' ' + ora + ' ' + text + '\n';
                     });
+                    bot.sendMessage(id, message, { parse_mode: 'Markdown' });
                 }
                 break;
             default:
                 break;
         }
-
     }).catch(() => {
-        bot.sendMessage(id, 'Credenziali non corrette o registro attualmente non raggiungibile.' + '\n' + 'Se hai problemi digita /help.');
+        bot.sendMessage(id, 'Credenziali non corrette o registro attualmente non raggiungibile.' + '\n' + 'Digita /help se hai bisogno di aiuto.');
     });
 }
 
@@ -346,14 +420,14 @@ function login(user) {
         if (id == user && logged == 1)
             bot.sendMessage(user, 'Hai già effettuato l\'accesso, premi / per visualizzare i comandi.');
         else if (id == user && logged == 0) {
-            bot.sendMessage(user, 'Inserisci la tua email:').then(() => {
+            bot.sendMessage(user, 'Inserisci la tua email o il tuo username:').then(() => {
                 answerCallbacks[user] = answer => {
                     let email = answer.text;
                     sql = 'UPDATE users SET email=? WHERE id=?';
                     con.query(sql, [email, user], err => {
                         if (err) {
                             insertError(err);
-                            bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, se hai bisogno digita /help');
+                            bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, digita /help se hai bisogno di aiuto.');
                         }
                         else {
                             bot.sendMessage(user, 'Inserisci la tua password:').then(() => {
@@ -363,14 +437,14 @@ function login(user) {
                                     con.query(sql, [encrypt(password), user], err => {
                                         if (err) {
                                             insertError(err);
-                                            bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, se hai bisogno digita /help');
+                                            bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, digita /help se hai bisogno di aiuto.');
                                         }
                                         else {
                                             sql = 'UPDATE users SET logged=? WHERE id=?';
                                             con.query(sql, [true, user], err => {
                                                 if (err) {
                                                     insertError(err);
-                                                    bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, se hai bisogno digita /help');
+                                                    bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, digita /help se hai bisogno di aiuto.');
                                                 }
                                                 else {
                                                     bot.sendMessage(user, 'Ora cosa vuoi fare?' + '\n' + 'Digita / per visualizzare i comandi.');
