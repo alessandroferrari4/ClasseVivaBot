@@ -21,6 +21,8 @@ Telegram bot to access the ClasseViva electronic register, without accessing the
 ## Release 1.1
 1) Bug fix
    - Ready for heroku deployment
+### Issues
+1) The display of messages is not optimal, the bot crashes.
 ## Release 1.2
 1) Marks:
    - Improved the visualization, added the total average.
