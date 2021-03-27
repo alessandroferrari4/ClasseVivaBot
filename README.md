@@ -3,37 +3,37 @@ Telegram bot to access the ClasseViva electronic register, without accessing the
 ## Release 1.0
 1) Login
 2) Logout
-3) Voti
+3) Marks
    - To be improved in the next updates
-4) Didattica
+4) Assignments
    - To be improved in the next updates
-5) Note
+5) Notes
    - To be improved in the next updates
-6) Profilo
-7) Presenze data odierna
+6) Profile
+7) Today's lessons
    - To be improved in the next updates
-8) Presenze altra data
+8) Another days of lessons
    - To be improved in the next updates
-9)  Aggiornamento delle credenziali
-10) Password criptata tramite algoritmo
-##### Issues
+9)  Credentials update
+10) Passwords encrypted by algorithm
+#### Issues
 1) The display of messages is not optimal, the bot crashes.
 ## Release 1.1
 1) Bug fix
    - Ready for heroku deployment
 ## Release 1.2
-1) Voti:
+1) Marks:
    - Improved the visualization, added the total average.
-2) Didattica
+2) Assignments
    - Improved the visualization
-3) Note
+3) Notes
    - Improved the visualization
-4) Profilo
+4) Profile
    - Improved the visualization
-5) Presenze data odierna
+5) Today's lessons
    - Improved the visualization
-6) Presenze altra data
+6) Another days of lessons
    - Improved the visualization
-##### Issues
-1) Didattica
+#### Issues
+1) Assignments
    - If there are too many files, they are not displayed, fix in future updates.
