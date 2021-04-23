@@ -18,7 +18,7 @@ Telegram bot to access the ClasseViva electronic register, without accessing the
 10) Passwords encrypted by algorithm
 ### Issues
 1) The display of messages is not optimal, the bot crashes.
-## Release 1.1
+## Release 1.0.1
 1) Bug fix
    - Ready for heroku deployment
 ### Issues
@@ -36,6 +36,14 @@ Telegram bot to access the ClasseViva electronic register, without accessing the
    - Improved the visualization
 6) Another days of lessons
    - Improved the visualization
+### Issues
+1) Assignments
+   - If there are too many files, they are not displayed, fix in future updates.
+## Release 1.3
+1) Marks:
+   - Added notification in case of new votes.
+2) Web App:
+   - Added a web application.
 ### Issues
 1) Assignments
    - If there are too many files, they are not displayed, fix in future updates.

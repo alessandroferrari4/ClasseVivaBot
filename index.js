@@ -1,19 +1,23 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
-const { ClasseViva } = require("classeviva-apiv2");
+const { ClasseViva } = require('classeviva-apiv2');
 const mysql = require('mysql');
 const emoji = require('node-emoji');
-const crypto = require("crypto");
+const crypto = require('crypto');
 const moment = require('moment');
+const express = require('express');
+const app = express();
+const path = require('path');
 
 const token = process.env.TOKEN;
 const url = process.env.URL;
 const key = process.env.ENCRYPTION_KEY;
+const port = process.env.PORT;
 const IV_LENGTH = 16;
 
 const options = {
     webHook: {
-        port: process.env.PORT,
+        port: port,
     }
 };
 const bot = new TelegramBot(token, options);
@@ -35,6 +39,54 @@ con.connect(err => {
     }
 });
 
+//#region Express
+app.set('view engine', 'ejs');
+app.use(express.static(path.join(__dirname, 'views/assets')));
+
+app.get('/', (req, res) => {
+    res.render('index.ejs');
+});
+
+app.get('/public', (req, res) => {
+    res.render('public/login.ejs');
+});
+
+app.get('/private', (req, res) => {
+    con.query('SELECT password,admin FROM users WHERE email=?', [req.query.email], (err, results) => {
+        if (results[0] != null) {
+            if (decrypt(results[0].password) == req.query.password && results[0].admin == true) {
+                con.query('SELECT u.email,s.request,s.date FROM statistics s INNER JOIN users u ON u.id = s.fk_user', (err, results) => {
+                    let template = [];
+                    for (let x = 0; x < results.length; x++) {
+                        template += '<tr>' + '<th scope="row">' + x + '</th>' +
+                            '<td>' + results[x].email + '</td>' +
+                            '<td>' + results[x].request + '</td>' +
+                            '<td>' + results[x].date + '</td>' + '</tr>';
+                    }
+                    res.render('private/admin.ejs', { template: template });
+                });
+            } else if (decrypt(results[0].password) == req.query.password && results[0].admin == false) {
+                ClasseViva.establishSession(req.query.email, req.query.password).then(async session => {
+                    var marks = await session.getMarks();
+                    let template = [];
+                    for (let x = 0; x < marks.length; x++) {
+                        template += '<tr>' + '<th scope="row">' + x + '</th>' +
+                            '<td>' + marks[x].subject + '</td>' +
+                            '<td>' + marks[x].mark + '</td>' +
+                            '<td>' + marks[x].date + '</td>' + '</tr>';
+                    }
+                    res.render('private/user.ejs', { template: template });
+                });
+            } else
+                res.render('public/login.ejs');
+        } else
+            res.render('public/login.ejs');
+    });
+});
+
+app.listen(port);
+//#endregion
+
 bot.on('message', msg => {
     var callback = answerCallbacks[msg.chat.id];
     if (callback) {
@@ -49,69 +101,71 @@ bot.on("callback_query", callbackQuery => {
         if (callbackQuery.data == '1') {
             bot.sendMessage(msg.chat.id, 'Inserisci la nuova password:').then(() => {
                 answerCallbacks[msg.chat.id] = answer => {
-                    let sql = 'UPDATE users SET password=? WHERE id=?';
-                    con.query(sql, [encrypt(answer.text), msg.chat.id], err => {
+                    con.query('UPDATE users SET password=? WHERE id=?', [encrypt(answer.text), msg.chat.id], err => {
                         if (err) {
                             insertError(err);
                             bot.sendMessage(msg.chat.id, 'Aggiornamento della password non riuscito, riprova più tardi.');
-                        } else {
+                        } else
                             bot.sendMessage(msg.chat.id, 'Password cambiata correttamente, digita / per visualizzare i comandi');
-                        }
                     });
                 }
             });
         } else if (callbackQuery.data == '2') {
             bot.sendMessage(msg.chat.id, 'Inserisci la nuova email o il nuovo username:').then(() => {
                 answerCallbacks[msg.chat.id] = answer => {
-                    let sql = 'UPDATE users SET email=? WHERE id=?';
-                    con.query(sql, [answer.text, msg.chat.id], err => {
+                    con.query('UPDATE users SET email=? WHERE id=?', [answer.text, msg.chat.id], err => {
                         if (err) {
                             insertError(err);
                             bot.sendMessage(msg.chat.id, 'Aggiornamento della email/username non riuscito, riprova più tardi.');
-                        }
-                        else {
+                        } else
                             bot.sendMessage(msg.chat.id, 'Email cambiata correttamente, digita / per visualizzare i comandi');
-                        }
                     });
                 }
             });
         } else if (callbackQuery.data == '3') {
             bot.sendMessage(msg.chat.id, 'Puoi contattarmi qui: @alessandrooferrarii');
         } else if (callbackQuery.data == '4') {
-            let sql = 'DELETE FROM statistics WHERE fk_user=?';
-            con.query(sql, [msg.chat.id], err => {
+            getStatus(msg.chat.id, (id, email, password) => {
+                ClasseViva.establishSession(email, decrypt(password)).then(async session => {
+                    await session.getMarks().then(marks => {
+                        con.query('UPDATE users SET notify=?,marks=? WHERE id=?', [true, marks.length, id], err => {
+                            if (err)
+                                bot.sendMessage(id, 'Si è verificato un problema, riprova più tardi!')
+                            else
+                                bot.sendMessage(id, 'Ogni trenta minuti verrà effettuato un controllo.');
+                        });
+                    });
+
+                });
+            });
+        } else if (callbackQuery.data == '5') {
+            con.query('DELETE FROM statistics WHERE fk_user=?', [msg.chat.id], err => {
                 if (err) {
                     insertError(err);
-                    bot.sendMessage(msg.chat.id, 'Cancellazione non riuscita, riprova più tardi');
-                }
-                else {
-                    sql = 'DELETE FROM users WHERE id=?';
-                    con.query(sql, [msg.chat.id], err => {
+                    bot.sendMessage(msg.chat.id, 'Cancellazione non riuscita, riprova più tardi.');
+                } else {
+                    con.query('DELETE FROM users WHERE id=?', [msg.chat.id], err => {
                         if (err) {
                             insertError(err);
-                            bot.sendMessage(msg.chat.id, 'Cancellazione non riuscita, riprova più tardi');
-                        }
-                        else {
+                            bot.sendMessage(msg.chat.id, 'Cancellazione non riuscita, riprova più tardi.');
+                        } else
                             bot.sendMessage(msg.chat.id, 'Cancellazione riuscita!' + emoji.get('wave') + '\n' + 'Digita /accedi se vuoi accedere di nuovo.' + emoji.get('grin'));
-                        }
                     });
                 }
             });
-        } else if (callbackQuery.data == '5') { }
+        } else if (callbackQuery.data == '6') {}
     });
 });
 
 bot.onText(/\/start/, msg => {
     bot.sendMessage(msg.chat.id, 'Benvenuto ' + msg.from.first_name + emoji.get('grin')).then(() => {
         bot.sendMessage(msg.chat.id, 'Digita /accedi per accedere, altrimenti digita /help se hai bisogno di aiuto.').then(() => {
-            let sql = 'SELECT * FROM users WHERE id=?';
-            con.query(sql, [msg.chat.id], (err, results) => {
+            con.query('SELECT * FROM users WHERE id=?', [msg.chat.id], (err, results) => {
                 if (err) {
                     insertError(err);
                     bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
                 } else if (results[0] == null) {
-                    sql = 'INSERT INTO users(id,logged) VALUES (?,?)';
-                    con.query(sql, [msg.chat.id, false], err => {
+                    con.query('INSERT INTO users(id,logged) VALUES (?,?)', [msg.chat.id, false], err => {
                         if (err) {
                             insertError(err);
                             bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
@@ -124,13 +178,11 @@ bot.onText(/\/start/, msg => {
 });
 
 bot.onText(/\/accedi/, msg => {
-    let sql = 'SELECT * FROM users WHERE id=?';
-    con.query(sql, [msg.chat.id], (err, results) => {
+    con.query('SELECT * FROM users WHERE id=?', [msg.chat.id], (err, results) => {
         if (err) {
             insertError(err);
             bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
         } else if (results[0] == null) {
-            sql = 'INSERT INTO users(id,logged) VALUES (?,?)';
             con.query(sql, [msg.chat.id, false], err => {
                 if (err) {
                     insertError(err);
@@ -177,8 +229,7 @@ bot.onText(/\/help/, msg => {
     bot.sendMessage(msg.chat.id, 'Di cosa hai bisogno?', {
         "reply_markup": {
             "inline_keyboard": [
-                [
-                    {
+                [{
                         text: "Aggiorna password",
                         callback_data: "1",
                     },
@@ -189,6 +240,10 @@ bot.onText(/\/help/, msg => {
                     {
                         text: "Contattami",
                         callback_data: "3"
+                    },
+                    {
+                        text: "Attiva notifiche voti",
+                        callback_data: "4"
                     }
                 ],
             ],
@@ -200,14 +255,13 @@ bot.onText(/\/logout/, msg => {
     bot.sendMessage(msg.chat.id, 'Le tue credenziali saranno rimosse SOLO dal database, e non da ClasseViva.' + '\n' + 'Vuoi continuare?', {
         "reply_markup": {
             "inline_keyboard": [
-                [
-                    {
+                [{
                         text: "Sì",
-                        callback_data: "4",
+                        callback_data: "5",
                     },
                     {
                         text: "No",
-                        callback_data: "5"
+                        callback_data: "6"
                     },
 
                 ],
@@ -216,6 +270,7 @@ bot.onText(/\/logout/, msg => {
     });
 });
 
+//#region Function
 function ClasseVivaSession(id, email, password, type, date) {
 
     ClasseViva.establishSession(email, password).then(async session => {
@@ -240,8 +295,7 @@ function ClasseVivaSession(id, email, password, type, date) {
                     bot.sendMessage(id, 'Non hai note, bravo!' + emoji.emojify(':sunglasses::clap:'));
                 } else {
                     for (let x in notes) {
-                        if (info.find(val => val == notes[x].teacher)) { }
-                        else {
+                        if (info.find(val => val == notes[x].teacher)) {} else {
                             info.push(notes[x].teacher);
                         }
                     }
@@ -258,8 +312,7 @@ function ClasseVivaSession(id, email, password, type, date) {
                 let media = 0;
                 let cont = 0;
                 for (let x in marks) {
-                    if (info.find(val => val == marks[x].subject)) { }
-                    else {
+                    if (info.find(val => val == marks[x].subject)) {} else {
                         info.push(marks[x].subject);
                     }
                 }
@@ -325,8 +378,7 @@ function ClasseVivaSession(id, email, password, type, date) {
                 break;
             case 'didattica':
                 for (let x in assignments) {
-                    if (info.find(val => val == assignments[x].teacherName)) { }
-                    else {
+                    if (info.find(val => val == assignments[x].teacherName)) {} else {
                         info.push(assignments[x].teacherName);
                     }
                 }
@@ -392,26 +444,22 @@ function operation(type, user, date) {
 }
 
 function getInfo(id, callback) {
-    let sql = 'SELECT id,logged FROM users WHERE id=?';
-    con.query(sql, [id], (err, results) => {
+    con.query('SELECT id,logged FROM users WHERE id=?', [id], (err, results) => {
         if (err) {
             insertError(err);
             bot.sendMessage(id, 'Si è verificato un problema, riprova più tardi.' + '\n' + 'Digita /help se hai bisogno di aiuto.');
-        }
-        else {
+        } else
             return callback(results[0].id, results[0].logged);
-        }
     });
 }
 
 function getStatus(id, callback) {
-    let sql = 'SELECT id,email,password FROM users WHERE id=?';
-    con.query(sql, [id], (err, results) => {
+    con.query('SELECT id,email,password FROM users WHERE id=?', [id], (err, results) => {
         if (err) {
             insertError(err);
             bot.sendMessage(id, 'Si è verificato un problema, riprova più tardi.' + '\n' + 'Digita /help se hai bisogno di aiuto.');
-        }
-        return callback(results[0].id, results[0].email, results[0].password);
+        } else
+            return callback(results[0].id, results[0].email, results[0].password);
     });
 }
 
@@ -423,32 +471,25 @@ function login(user) {
             bot.sendMessage(user, 'Inserisci la tua email o il tuo username:').then(() => {
                 answerCallbacks[user] = answer => {
                     let email = answer.text;
-                    sql = 'UPDATE users SET email=? WHERE id=?';
-                    con.query(sql, [email, user], err => {
+                    con.query('UPDATE users SET email=? WHERE id=?', [email, user], err => {
                         if (err) {
                             insertError(err);
                             bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, digita /help se hai bisogno di aiuto.');
-                        }
-                        else {
+                        } else {
                             bot.sendMessage(user, 'Inserisci la tua password:').then(() => {
                                 answerCallbacks[user] = answer => {
                                     let password = answer.text;
-                                    sql = 'UPDATE users SET password=? WHERE id=?';
-                                    con.query(sql, [encrypt(password), user], err => {
+                                    con.query('UPDATE users SET password=? WHERE id=?', [encrypt(password), user], err => {
                                         if (err) {
                                             insertError(err);
                                             bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, digita /help se hai bisogno di aiuto.');
-                                        }
-                                        else {
-                                            sql = 'UPDATE users SET logged=? WHERE id=?';
-                                            con.query(sql, [true, user], err => {
+                                        } else {
+                                            con.query('UPDATE users SET logged=? WHERE id=?', [true, user], err => {
                                                 if (err) {
                                                     insertError(err);
                                                     bot.sendMessage(user, 'Si è verificato un problema con la registrazione!' + '\n' + 'Riprova più tardi, digita /help se hai bisogno di aiuto.');
-                                                }
-                                                else {
+                                                } else
                                                     bot.sendMessage(user, 'Ora cosa vuoi fare?' + '\n' + 'Digita / per visualizzare i comandi.');
-                                                }
                                             });
                                         }
                                     });
@@ -464,11 +505,9 @@ function login(user) {
 
 function insertStatistics(type, id) {
     let date = moment().format('YYYY-MM-DD HH:mm:ss');
-    sql = 'INSERT INTO statistics (request,date,fk_user) VALUES (?,?,?)';
-    con.query(sql, [type, date, id], err => {
-        if (err) {
+    con.query('INSERT INTO statistics (request,date,fk_user) VALUES (?,?,?)', [type, date, id], err => {
+        if (err)
             insertError(err);
-        }
     });
 }
 
@@ -491,7 +530,34 @@ function decrypt(text) {
 }
 
 function insertError(type) {
-    let sql = 'INSERT INTO errors (type,date) VALUES (?,?)';
     let date = moment.format('YYYY-MM-DD HH:mm:ss');
-    con.query(sql, [type, date]);
+    con.query('INSERT INTO errors (type,date) VALUES (?,?)', [type, date]);
 }
+
+setInterval(() => {
+    con.query('SELECT id,notify,marks FROM users', (err, results) => {
+        if (err)
+            insertError(err);
+        else {
+            results.forEach(element => {
+                if (element.notify == true) {
+                    getStatus(element.id, (id, email, password) => {
+                        ClasseViva.establishSession(email, decrypt(password)).then(async session => {
+                            await session.getMarks().then(marks => {
+                                if (marks.length != element.marks) {
+                                    bot.sendMessage(id, 'Hai un nuovo voto' + emoji.get('exclamation')).then(() => {
+                                        con.query('UPDATE users SET marks=? WHERE id=?', [marks.length, id], err => {
+                                            if (err)
+                                                insertError(err);
+                                        });
+                                    });
+                                }
+                            })
+                        });
+                    });
+                }
+            });
+        }
+    });
+}, 1800000);
+//#endregion
