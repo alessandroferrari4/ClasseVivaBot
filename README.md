@@ -47,3 +47,8 @@ Telegram bot to access the ClasseViva electronic register, without accessing the
 ### Issues
 1) Assignments
    - If there are too many files, they are not displayed, fix in future updates.
+## Release 1.3.1
+1) Bug fix
+   - Assignments are now displayed correctly, if they are not too many files (approximately more than 8192 characters)
+### Issues
+   - No issues
