@@ -98,7 +98,7 @@ bot.on('message', msg => {
 bot.on("callback_query", callbackQuery => {
     let msg = callbackQuery.message;
     bot.answerCallbackQuery(callbackQuery.id).then(() => {
-        if (callbackQuery.data == '1') {
+        if (callbackQuery.data === '1') {
             bot.sendMessage(msg.chat.id, 'Inserisci la nuova password:').then(() => {
                 answerCallbacks[msg.chat.id] = answer => {
                     con.query('UPDATE users SET password=? WHERE id=?', [encrypt(answer.text), msg.chat.id], err => {
@@ -110,7 +110,7 @@ bot.on("callback_query", callbackQuery => {
                     });
                 }
             });
-        } else if (callbackQuery.data == '2') {
+        } else if (callbackQuery.data === '2') {
             bot.sendMessage(msg.chat.id, 'Inserisci la nuova email o il nuovo username:').then(() => {
                 answerCallbacks[msg.chat.id] = answer => {
                     con.query('UPDATE users SET email=? WHERE id=?', [answer.text, msg.chat.id], err => {
@@ -122,23 +122,34 @@ bot.on("callback_query", callbackQuery => {
                     });
                 }
             });
-        } else if (callbackQuery.data == '3') {
+        } else if (callbackQuery.data === '3') {
             bot.sendMessage(msg.chat.id, 'Puoi contattarmi qui: @alessandrooferrarii');
-        } else if (callbackQuery.data == '4') {
-            getStatus(msg.chat.id, (id, email, password) => {
-                ClasseViva.establishSession(email, decrypt(password)).then(async session => {
-                    await session.getMarks().then(marks => {
-                        con.query('UPDATE users SET notify=?,marks=? WHERE id=?', [true, marks.length, id], err => {
-                            if (err)
-                                bot.sendMessage(id, 'Si è verificato un problema, riprova più tardi!')
-                            else
-                                bot.sendMessage(id, 'Ogni trenta minuti verrà effettuato un controllo.');
+        } else if (callbackQuery.data === '4') {
+            con.query('SELECT notify FROM users WHERE id=?', [msg.chat.id], (err, results) => {
+                if (results[0].notify !== 1) {
+                    getStatus(msg.chat.id, (id, email, password) => {
+                        ClasseViva.establishSession(email, decrypt(password)).then(async session => {
+                            await session.getMarks().then(marks => {
+                                con.query('UPDATE users SET notify=?,marks=? WHERE id=?', [true, marks.length, id], err => {
+                                    if (err)
+                                        bot.sendMessage(id, 'Si è verificato un problema, riprova più tardi!')
+                                    else
+                                        bot.sendMessage(id, 'Ogni trenta minuti verrà effettuato un controllo.');
+                                });
+                            });
+
                         });
                     });
-
-                });
+                } else {
+                    con.query('UPDATE users SET notify=?,marks=? WHERE id=?', [false, null, msg.chat.id], err => {
+                        if (err)
+                            insertError(err);
+                        else
+                            bot.sendMessage(msg.chat.id, 'Notifiche disattivate' + emoji.get('grin'));
+                    });
+                }
             });
-        } else if (callbackQuery.data == '5') {
+        } else if (callbackQuery.data === '5') {
             con.query('DELETE FROM statistics WHERE fk_user=?', [msg.chat.id], err => {
                 if (err) {
                     insertError(err);
@@ -153,7 +164,7 @@ bot.on("callback_query", callbackQuery => {
                     });
                 }
             });
-        } else if (callbackQuery.data == '6') {}
+        }
     });
 });
 
@@ -164,7 +175,7 @@ bot.onText(/\/start/, msg => {
                 if (err) {
                     insertError(err);
                     bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
-                } else if (results[0] == null) {
+                } else if (results[0] === null) {
                     con.query('INSERT INTO users(id,logged) VALUES (?,?)', [msg.chat.id, false], err => {
                         if (err) {
                             insertError(err);
@@ -182,7 +193,7 @@ bot.onText(/\/accedi/, msg => {
         if (err) {
             insertError(err);
             bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
-        } else if (results[0] == null) {
+        } else if (results[0] === null) {
             con.query(sql, [msg.chat.id, false], err => {
                 if (err) {
                     insertError(err);
@@ -191,7 +202,7 @@ bot.onText(/\/accedi/, msg => {
                     login(msg.chat.id);
                 }
             });
-        } else if (results[0] != null) {
+        } else if (results[0] !== null) {
             login(msg.chat.id);
         }
     });
@@ -294,50 +305,48 @@ function ClasseVivaSession(id, email, password, type, date) {
                 if (notes.length == 0) {
                     bot.sendMessage(id, 'Non hai note, bravo!' + emoji.emojify(':sunglasses::clap:'));
                 } else {
-                    for (let x in notes) {
-                        if (info.find(val => val == notes[x].teacher)) {} else {
-                            info.push(notes[x].teacher);
-                        }
-                    }
-                    for (let x in info) {
-                        message += '\n' + emoji.get('male-teacher') + info[x] + '\n';
-                        notes.forEach(element => {
-                            if (info[x] == element.teacher)
-                                message += '\n' + emoji.get('clipboard') + element.content + '\n' + emoji.get('date') + element.date + '\n';
+                    notes.forEach(notes => {
+                        if (!info.find(val => val == notes.teacher))
+                            info.push(notes.teacher);
+                    });
+                    info.forEach(info => {
+                        message += '\n' + emoji.get('male-teacher') + info + '\n';
+                        notes.forEach(notes => {
+                            if (info == notes.teacher)
+                                message += '\n' + emoji.get('clipboard') + notes.content + '\n' + emoji.get('date') + notes.date + '\n';
                         });
-                    }
+                    });
                 }
                 break;
             case 'voti':
                 let media = 0;
                 let cont = 0;
-                for (let x in marks) {
-                    if (info.find(val => val == marks[x].subject)) {} else {
-                        info.push(marks[x].subject);
-                    }
-                }
-                for (let x in info) {
-                    message += '\n' + '_' + info[x] + '_' + '\n';
-                    marks.forEach(element => {
-                        if (element.mark.includes('-')) {
-                            media += parseFloat(element.mark) - 1 + 0.75;
+                marks.forEach(marks => {
+                    if (!info.find(val => val === marks.subject))
+                        info.push(marks.subject);
+                });
+                info.forEach(info => {
+                    message += '\n' + '_' + info + '_' + '\n';
+                    marks.forEach(marks => {
+                        if (marks.mark.includes('-')) {
+                            media += parseFloat(marks.mark) - 1 + 0.75;
                             cont += 1;
-                        } else if (element.mark.includes('+')) {
-                            media += parseFloat(element.mark) + 0.25;
+                        } else if (marks.mark.includes('+')) {
+                            media += parseFloat(marks.mark) + 0.25;
                             cont += 1;
-                        } else if (element.mark.includes('½')) {
-                            media += parseFloat(element.mark) + 0.50;
+                        } else if (marks.mark.includes('½')) {
+                            media += parseFloat(marks.mark) + 0.50;
                             cont += 1;
                         }
-                        if (info[x] == element.subject) {
-                            if (parseInt(element.mark) >= 6 || element.mark.includes('s') || element.mark.includes('b') || element.mark.includes('d') || element.mark.includes('o'))
+                        if (info === marks.subject) {
+                            if (parseInt(marks.mark) >= 6 || marks.mark.includes('s') || marks.mark.includes('b') || marks.mark.includes('d') || marks.mark.includes('o'))
                                 color = emoji.get('white_check_mark');
                             else
                                 color = emoji.get('exclamation');
-                            message += '\n' + color + element.mark + '\n' + emoji.get('date') + element.date + '\n' + emoji.get('clipboard') + element.type + '\n';
+                            message += '\n' + color + marks.mark + '\n' + emoji.get('date') + marks.date + '\n' + emoji.get('clipboard') + marks.type + '\n';
                         }
                     });
-                }
+                });
                 message += '\n' + 'Media totale: ' + (media / cont).toFixed(2);
                 bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {
                     bot.sendMessage(id, 'Hai troppi voti, di ai tuoi professori di calmarsi!' + emoji.get('joy') + '\n' + 'Puoi controllarli sull\'app ClasseViva o sul sito:' + 'https://web.spaggiari.eu/sdf/app/default/cvv.php');
@@ -351,44 +360,43 @@ function ClasseVivaSession(id, email, password, type, date) {
             case 'oggi':
                 presences = topics['presences'];
                 subjects = topics['subjects'];
-                if (presences.length == 0 && subjects.length == 0) {
+                if (presences.length === 0 && subjects.length === 0) {
                     bot.sendMessage(id, 'Oggi è il tuo giorno libero, goditelo!' + emoji.get('champagne'));
                 } else {
                     message += '_' + 'Presenze' + '_' + '\n';
-                    presences.forEach(element => {
-                        if (element.status == 'AL')
+                    presences.forEach(presences => {
+                        if (presences.status === 'AL')
                             color = emoji.get('exclamation');
                         else
                             color = emoji.get('white_check_mark');
-                        message += '\n' + color + ' ' + element.status + ' ' + element.length + '\n';
+                        message += '\n' + color + ' ' + presences.status + ' ' + presences.length + '\n';
                     });
                     message += '\n' + '_' + 'Lezioni' + '_' + '\n';
-                    subjects.forEach(element => {
-                        if (element.hoursDone <= 1) {
+                    subjects.forEach(subjects => {
+                        if (subjects.hoursDone <= 1) {
                             ora = 'ora';
                             text = 'fatta';
                         } else {
                             ora = 'ore';
                             text = 'fatte';
                         }
-                        message += '\n' + emoji.get('male-teacher') + '*' + element.teacherName + '*' + '\n' + element.subject + '\n' + element.lessonArgument + '\n' + element.hour + ' ora' + '\n' + element.hoursDone + ' ' + ora + ' ' + text + '\n';
+                        message += '\n' + emoji.get('male-teacher') + '*' + subjects.teacherName + '*' + '\n' + subjects.subject + '\n' + subjects.lessonArgument + '\n' + subjects.hour + ' ora' + '\n' + subjects.hoursDone + ' ' + ora + ' ' + text + '\n';
                     });
                     bot.sendMessage(id, message, { parse_mode: 'Markdown' });
                 }
                 break;
             case 'didattica':
-                for (let x in assignments) {
-                    if (info.find(val => val == assignments[x].teacherName)) {} else {
-                        info.push(assignments[x].teacherName);
-                    }
-                }
-                for (let x in info) {
-                    message += '\n' + emoji.get('male-teacher') + '*' + info[x] + '*' + '\n';
-                    assignments.forEach(element => {
-                        if (info[x] == element.teacherName)
-                            message += '\n' + emoji.get('clipboard') + element.assignmentTitle + '\n' + emoji.get('date') + element.date + '\n';
+                assignments.forEach(assignments => {
+                    if (!info.find(val => val === assignments.teacherName))
+                        info.push(assignments.teacherName);
+                });
+                info.forEach(info => {
+                    message += '\n' + emoji.get('male-teacher') + '*' + info + '*' + '\n';
+                    assignments.forEach(assignments => {
+                        if (info == assignments.teacherName)
+                            message += '\n' + emoji.get('clipboard') + assignments.assignmentTitle + '\n' + emoji.get('date') + assignments.date + '\n';
                     });
-                }
+                });
                 bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {
                     bot.sendMessage(id, 'Hai troppi file in didattica che non riesco a caricare!');
                 });
@@ -396,27 +404,27 @@ function ClasseVivaSession(id, email, password, type, date) {
             case 'giorno':
                 presences = topics['presences'];
                 subjects = topics['subjects'];
-                if (presences.length == 0 && subjects.length == 0) {
-                    bot.sendMessage(id, 'Oggi è il tuo giorno libero, goditelo!' + emoji.get('champagne'));
+                if (presences.length === 0 && subjects.length === 0) {
+                    bot.sendMessage(id, 'Era il tuo giorno libero, te lo sarai goduto!' + emoji.get('champagne'));
                 } else {
                     message += '_' + 'Presenze' + '_' + '\n';
-                    presences.forEach(element => {
-                        if (element.status == 'AL')
+                    presences.forEach(presences => {
+                        if (presences.status === 'AL')
                             color = emoji.get('exclamation');
                         else
                             color = emoji.get('white_check_mark');
-                        message += '\n' + color + ' ' + element.status + ' ' + element.length + '\n';
+                        message += '\n' + color + ' ' + presences.status + ' ' + presences.length + '\n';
                     });
                     message += '\n' + '_' + 'Lezioni' + '_' + '\n';
-                    subjects.forEach(element => {
-                        if (element.hoursDone <= 1) {
+                    subjects.forEach(subjects => {
+                        if (subjects.hoursDone <= 1) {
                             ora = 'ora';
                             text = 'fatta';
                         } else {
                             ora = 'ore';
                             text = 'fatte';
                         }
-                        message += '\n' + emoji.get('male-teacher') + '*' + element.teacherName + '*' + '\n' + element.subject + '\n' + element.lessonArgument + '\n' + element.hour + ' ora' + '\n' + element.hoursDone + ' ' + ora + ' ' + text + '\n';
+                        message += '\n' + emoji.get('male-teacher') + '*' + subjects.teacherName + '*' + '\n' + subjects.subject + '\n' + subjects.lessonArgument + '\n' + subjects.hour + ' ora' + '\n' + subjects.hoursDone + ' ' + ora + ' ' + text + '\n';
                     });
                     bot.sendMessage(id, message, { parse_mode: 'Markdown' });
                 }
@@ -431,9 +439,9 @@ function ClasseVivaSession(id, email, password, type, date) {
 
 function operation(type, user, date) {
     getInfo(user, (id, logged) => {
-        if (user == id && logged == 0) {
+        if (user === id && logged === 0) {
             bot.sendMessage(id, 'Prima devi accedere, digita /accedi per farlo.');
-        } else if (user == id && logged == 1) {
+        } else if (user === id && logged === 1) {
             insertStatistics(type, user);
             getStatus(user, (id, email, password) => {
                 ClasseVivaSession(id, email, decrypt(password), type, date);
@@ -465,9 +473,9 @@ function getStatus(id, callback) {
 
 function login(user) {
     getInfo(user, (id, logged) => {
-        if (id == user && logged == 1)
+        if (id === user && logged === 1)
             bot.sendMessage(user, 'Hai già effettuato l\'accesso, premi / per visualizzare i comandi.');
-        else if (id == user && logged == 0) {
+        else if (id === user && logged === 0) {
             bot.sendMessage(user, 'Inserisci la tua email o il tuo username:').then(() => {
                 answerCallbacks[user] = answer => {
                     let email = answer.text;
@@ -540,7 +548,7 @@ setInterval(() => {
             insertError(err);
         else {
             results.forEach(element => {
-                if (element.notify == true) {
+                if (element.notify === 1) {
                     getStatus(element.id, (id, email, password) => {
                         ClasseViva.establishSession(email, decrypt(password)).then(async session => {
                             await session.getMarks().then(marks => {
