@@ -241,23 +241,23 @@ bot.onText(/\/help/, msg => {
         "reply_markup": {
             "inline_keyboard": [
                 [{
-                        text: "Aggiorna password",
-                        callback_data: "1",
-                    },
-                    {
-                        text: "Aggiorna email o username",
-                        callback_data: "2",
-                    },
-                    {
-                        text: "Contattami",
-                        callback_data: "3"
-                    },
-                    {
-                        text: "Attiva notifiche voti",
-                        callback_data: "4"
-                    }
-                ],
+                    text: "Aggiorna password",
+                    callback_data: "1",
+                }, ],
+                [{
+                    text: "Aggiorna email o username",
+                    callback_data: "2",
+                }, ],
+                [{
+                    text: "Contattami",
+                    callback_data: "3"
+                }, ],
+                [{
+                    text: "Attiva notifiche voti",
+                    callback_data: "4"
+                }, ],
             ],
+
         },
     });
 });
@@ -299,6 +299,8 @@ function ClasseVivaSession(id, email, password, type, date) {
         let info = [];
         let presences = [];
         let subjects = [];
+        let message2 = '';
+        let cont = 0;
 
         switch (type) {
             case 'note':
@@ -320,7 +322,6 @@ function ClasseVivaSession(id, email, password, type, date) {
                 break;
             case 'voti':
                 let media = 0;
-                let cont = 0;
                 marks.forEach(marks => {
                     if (!info.find(val => val === marks.subject))
                         info.push(marks.subject);
@@ -391,15 +392,33 @@ function ClasseVivaSession(id, email, password, type, date) {
                         info.push(assignments.teacherName);
                 });
                 info.forEach(info => {
-                    message += '\n' + emoji.get('male-teacher') + '*' + info + '*' + '\n';
+                    if (message2 !== '')
+                        message2 += '\n' + emoji.get('male-teacher') + '*' + info + '*' + '\n';
+                    else
+                        message += '\n' + emoji.get('male-teacher') + '*' + info + '*' + '\n';
                     assignments.forEach(assignments => {
-                        if (info == assignments.teacherName)
-                            message += '\n' + emoji.get('clipboard') + assignments.assignmentTitle + '\n' + emoji.get('date') + assignments.date + '\n';
+                        if (info === assignments.teacherName) {
+                            if (message.length <= 3000) {
+                                message += '\n' + emoji.get('clipboard') + assignments.assignmentTitle + '\n' + emoji.get('date') + assignments.date + '\n';
+                                cont += message.length;
+                            } else {
+                                message2 += '\n' + emoji.get('clipboard') + assignments.assignmentTitle + '\n' + emoji.get('date') + assignments.date + '\n';
+                                cont += message.length;
+                            }
+                        }
                     });
                 });
-                bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {
-                    bot.sendMessage(id, 'Hai troppi file in didattica che non riesco a caricare!');
-                });
+                if (message2 !== '') {
+                    bot.sendMessage(id, message, { parse_mode: 'Markdown' }).then(() => {
+                        bot.sendMessage(id, message2, { parse_mode: 'Markdown' }).catch(() => {
+                            bot.sendMessage(id, 'Hai troppi file in didattica che non riesco a caricare!');
+                        });
+                    });
+                } else {
+                    bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {
+                        bot.sendMessage(id, 'Hai troppi file in didattica che non riesco a caricare!');
+                    });
+                }
                 break;
             case 'giorno':
                 presences = topics['presences'];
