@@ -54,7 +54,7 @@ app.get('/public', (req, res) => {
 app.get('/private', (req, res) => {
     con.query('SELECT password,admin FROM users WHERE email=?', [req.query.email], (err, results) => {
         if (results[0] != null) {
-            if (decrypt(results[0].password) == req.query.password && results[0].admin == true) {
+            if (decrypt(results[0].password) === req.query.password && results[0].admin === 1) {
                 con.query('SELECT u.email,s.request,s.date FROM statistics s INNER JOIN users u ON u.id = s.fk_user', (err, results) => {
                     let template = [];
                     for (let x = 0; x < results.length; x++) {
@@ -65,17 +65,18 @@ app.get('/private', (req, res) => {
                     }
                     res.render('private/admin.ejs', { template: template });
                 });
-            } else if (decrypt(results[0].password) == req.query.password && results[0].admin == false) {
+            } else if (decrypt(results[0].password) === req.query.password && results[0].admin === 0) {
                 ClasseViva.establishSession(req.query.email, req.query.password).then(async session => {
-                    var marks = await session.getMarks();
-                    let template = [];
-                    for (let x = 0; x < marks.length; x++) {
-                        template += '<tr>' + '<th scope="row">' + x + '</th>' +
-                            '<td>' + marks[x].subject + '</td>' +
-                            '<td>' + marks[x].mark + '</td>' +
-                            '<td>' + marks[x].date + '</td>' + '</tr>';
-                    }
-                    res.render('private/user.ejs', { template: template });
+                    await session.getMarks().then(async marks => {
+                        let template = [];
+                        for (let x = 0; x < marks.length; x++) {
+                            template += '<tr>' + '<th scope="row">' + x + '</th>' +
+                                '<td>' + marks[x].subject + '</td>' +
+                                '<td>' + marks[x].mark + '</td>' +
+                                '<td>' + marks[x].date + '</td>' + '</tr>';
+                        }
+                        res.render('private/user.ejs', { template: template });
+                    });
                 });
             } else
                 res.render('public/login.ejs');
@@ -175,8 +176,8 @@ bot.onText(/\/start/, msg => {
                 if (err) {
                     insertError(err);
                     bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
-                } else if (results[0] === null) {
-                    con.query('INSERT INTO users(id,logged) VALUES (?,?)', [msg.chat.id, false], err => {
+                } else if (results[0] == null) {
+                    con.query('INSERT INTO users(id,logged,admin) VALUES (?,?)', [msg.chat.id, false, false], err => {
                         if (err) {
                             insertError(err);
                             bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
@@ -193,7 +194,7 @@ bot.onText(/\/accedi/, msg => {
         if (err) {
             insertError(err);
             bot.sendMessage(msg.chat.id, 'Si è verificato un problema, riprova più tardi!');
-        } else if (results[0] === null) {
+        } else if (results[0] == null) {
             con.query(sql, [msg.chat.id, false], err => {
                 if (err) {
                     insertError(err);
@@ -202,7 +203,7 @@ bot.onText(/\/accedi/, msg => {
                     login(msg.chat.id);
                 }
             });
-        } else if (results[0] !== null) {
+        } else if (results[0] != null) {
             login(msg.chat.id);
         }
     });
@@ -304,7 +305,7 @@ function ClasseVivaSession(id, email, password, type, date) {
 
         switch (type) {
             case 'note':
-                if (notes.length == 0) {
+                if (notes.length === 0) {
                     bot.sendMessage(id, 'Non hai note, bravo!' + emoji.emojify(':sunglasses::clap:'));
                 } else {
                     notes.forEach(notes => {
