@@ -67,7 +67,7 @@ app.get('/private', (req, res) => {
                 });
             } else if (decrypt(results[0].password) === req.query.password && results[0].admin === 0) {
                 ClasseViva.establishSession(req.query.email, req.query.password).then(async session => {
-                    await session.getMarks().then(async marks => {
+                    await session.getMarks().then(marks => {
                         let template = [];
                         for (let x = 0; x < marks.length; x++) {
                             template += '<tr>' + '<th scope="row">' + x + '</th>' +
